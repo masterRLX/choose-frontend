@@ -11,39 +11,37 @@ function NextScreen({ paintingDetails, isLoading, error, onClose, onNextClick })
 
     useEffect(() => {
         // 컴포넌트가 처음 마운트될 때, 초기 그림 데이터를 즉시 표시 상태로 설정
-        if (paintingDetails && !displayPainting) {
-            setDisplayPainting(paintingDetails);
-            // 아주 잠깐의 딜레이 후 fade-in
-            setTimeout(() => setIsFading(true), 50);
-            return;
-        }
+        // 또는 새로운 그림 데이터(prop)가 들어왔고, 현재 표시된 그림과 다를 때
+        if (paintingDetails && (!displayPainting || paintingDetails.img_hq !== displayPainting.img_hq)) {
+            // 새 그림 로드 시작 시 기존 그림을 fade-out 시키거나 초기화
+            setIsFading(false); // 먼저 숨김
 
-        // 새로운 그림 데이터(prop)가 들어왔고, 현재 표시된 그림과 다를 때
-        if (paintingDetails && displayPainting && paintingDetails.img_hq !== displayPainting.img_hq) {
-            
-            // 1. 현재 그림을 Fade-out 시킴
-            setIsFading(false);
-
-            // 2. Fade-out 애니메이션 시간(500ms) 후에 다음 작업을 진행
+            // 기존 타임아웃이 있다면 클리어
             if (transitionTimeoutRef.current) clearTimeout(transitionTimeoutRef.current);
-            transitionTimeoutRef.current = setTimeout(() => {
-                // 3. 백그라운드에서 고화질 이미지 '유령 로딩' 시작
-                const highResLoader = new Image();
-                highResLoader.src = paintingDetails.img_hq;
 
-                // 4. 로딩이 완료되면
-                highResLoader.onload = () => {
-                    // 5. 화면에 표시될 그림을 새 그림으로 교체하고
+            // 유령 로딩 시작 (고화질 이미지 미리 로드)
+            const highResLoader = new Image();
+            highResLoader.src = paintingDetails.img_hq;
+
+            highResLoader.onload = () => {
+                // 고화질 이미지 로딩 완료 후, 일정 시간(transitionTimeoutRef) 후에 표시
+                transitionTimeoutRef.current = setTimeout(() => {
                     setDisplayPainting(paintingDetails);
-                    // 6. ✨ 아주 잠깐의 틈을 준 뒤 fade-in 신호를 보냄 (애니메이션 스킵 방지)
+                    // 아주 잠깐의 틈을 준 뒤 fade-in 신호를 보냄 (애니메이션 스킵 방지)
                     setTimeout(() => {
                         setIsFading(true);
-                    }, 50);
-                };
-                highResLoader.onerror = () => {
-                    onNextClick();
-                };
-            }, 1500); // CSS transition 시간과 일치
+                    }, 50); // 짧은 딜레이로 페이드인 시작
+                }, displayPainting ? 1500 : 0); // 기존 그림이 있다면 페이드아웃 시간만큼 기다림 (1.5초)
+            };
+            highResLoader.onerror = () => {
+                // 고화질 로딩 실패 시 다음 그림으로 넘어감
+                console.warn("Failed to load high-res image, attempting next painting.");
+                onNextClick();
+            };
+        } else if (!paintingDetails && displayPainting) {
+             // paintingDetails가 null이 되면 화면을 비움 (ex: 에러나서 그림이 없을때)
+             setIsFading(false);
+             setTimeout(() => setDisplayPainting(null), 1500); // fade-out 시간만큼 기다린 후 비움
         }
         
         return () => {
@@ -76,13 +74,14 @@ function NextScreen({ paintingDetails, isLoading, error, onClose, onNextClick })
     
     return (
         <div id="nextScreen">
-            {isLoading && !displayPainting && <p>...LOADING...</p>}
+            {/* 로딩 중일 때 메시지 표시. displayPainting이 없으면 초기 로딩이거나 다음 그림을 기다리는 중 */}
+            {(isLoading || (!displayPainting && !error)) && <p style={{color: '#fff', fontSize: '1.2rem'}}>...LOADING...</p>}
             {error && <div style={{position: 'absolute', zIndex: 20, color: 'orange'}}><p>{error}</p></div>}
             
             {displayPainting && (
                 <div 
                     onClick={() => { if (!isLoading && !error) onNextClick(); }} 
-                    style={{ cursor: isLoading || error ? 'default' : 'pointer' }}
+                    style={{ cursor: isLoading || error ? 'default' : 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', width: '100%', height: '100%' }}
                 >
                     <img
                         id="paintingImage"
