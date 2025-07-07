@@ -60,15 +60,13 @@ function Carousel({ onEmojiSelect, onTransitionEnd }) {
     const initialRotationForClickRef = useRef(0);
     const targetRotationForClickRef = useRef(0);
     
-    // numItems, anglePerItem, radius는 currentEmojis 상태에 의존하므로
-    // useCallback 훅 내부에서 필요한 경우 클로저로 캡처되도록 두거나,
-    // 해당 훅의 의존성에 currentEmojis를 추가하여 업데이트되도록 합니다.
-    // 여기서는 최상위 컴포넌트 렌더링 시점에 계산되는 값으로 둡니다.
+    // numItems, anglePerItem, radius는 currentEmojis 상태에 의존하며,
+    // 컴포넌트 렌더링 시점에 계산되므로 useCallback 훅 외부에 두어 매 렌더링마다 최신 값 참조
     const numItems = currentEmojis.length;
     const anglePerItem = numItems === 0 ? 0 : 360 / numItems;
     const radius = numItems === 0 ? 0 : Math.round((EFFECTIVE_ITEM_SIZE / 2) / Math.tan(Math.PI / numItems)) + 70;
 
-    // ----- 모든 useCallback 함수를 이 위치에 모아서 정의 시작 -----
+    // ----- 모든 useCallback 함수들을 상단에 모아서 정의 시작 -----
 
     const handleInteractionEnd = useCallback(() => {
         setIsInteractingWithCarousel(false);
@@ -96,11 +94,12 @@ function Carousel({ onEmojiSelect, onTransitionEnd }) {
     const animateRotation = useCallback(() => {
         if (!isInteractingWithCarousel) {
             setCurrentRotation(prev => prev - ROTATION_SPEED_DEGREES_PER_FRAME);
-            animationFrameIdRef.current = requestAnimationFrame(animateRotation); // 자기 자신 참조
+            animationFrameIdRef.current = requestAnimationFrame(animateRotation); // 자기 자신을 참조
         } else {
             animationFrameIdRef.current = null;
         }
-    }, [isInteractingWithCarousel]); // isInteractingWithCarousel 추가
+    }, [isInteractingWithCarousel]); // isInteractingWithCarousel 의존
+
 
     const updateCarouselDisplay = useCallback(() => {
         if (!carouselContainerRef.current) return;
@@ -227,7 +226,7 @@ function Carousel({ onEmojiSelect, onTransitionEnd }) {
             onTransitionEnd();
         }, Math.max(SINK_DURATION_OPACITY, SCREEN_SINK_START_DELAY + SCREEN_SINK_DURATION_OPACITY));
 
-    }, [currentEmojis, handleInteractionStart, onEmojiSelect, onTransitionEnd, handleInteractionEnd]); // 의존성 추가 완료
+    }, [currentEmojis, handleInteractionStart, onEmojiSelect, onTransitionEnd, handleInteractionEnd]);
 
     const handleMouseDown = useCallback((e) => {
         if (e.button === 0) {
@@ -303,7 +302,32 @@ function Carousel({ onEmojiSelect, onTransitionEnd }) {
         return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
     }, []);
 
-    // ----- 모든 useCallback 함수를 이 위치에 모아서 정의 끝 -----
+    const mouseMoveHandler = useCallback((e) => {
+        const mouseX = e.clientX;
+        const mouseY = e.clientY;
+        let showArrows = false;
+        const prevBtnElement = prevBtnRef.current;
+        const nextBtnElement = nextBtnRef.current;
+        if (prevBtnElement) {
+            const btnCenter = getElementCenter(prevBtnElement);
+            if (Math.sqrt(Math.pow(mouseX - btnCenter.x, 2) + Math.pow(mouseY - btnCenter.y, 2)) < ARROW_PROXIMITY_RADIUS) {
+                showArrows = true;
+            }
+        }
+        if (nextBtnElement) {
+            const btnCenter = getElementCenter(nextBtnElement);
+            if (Math.sqrt(Math.pow(mouseX - btnCenter.x, 2) + Math.pow(mouseY - btnCenter.y, 2)) < ARROW_PROXIMITY_RADIUS) {
+                showArrows = true;
+            }
+        }
+        if (isHoveringAnyEmojiOrWrapper) {
+            showArrows = true;
+        }
+        if (prevBtnElement) prevBtnElement.classList.toggle('visible', showArrows);
+        if (nextBtnElement) nextBtnElement.classList.toggle('visible', showArrows); // 오타 수정 (이미 수정되어 있었을 것)
+    }, [getElementCenter, isHoveringAnyEmojiOrWrapper, ARROW_PROXIMITY_RADIUS]);
+
+    // ----- 모든 useCallback 함수들을 상단에 모아서 정의 끝 -----
 
 
     useEffect(() => {
@@ -312,15 +336,20 @@ function Carousel({ onEmojiSelect, onTransitionEnd }) {
     }, []);
 
     useEffect(() => {
-        // updateCarouselDisplay를 useEffect에서 호출하여 렌더링에 반영
+        // updateCarouselDisplay는 useCallback으로 감싸져 있으므로 의존성에 추가.
+        // requestAnimationFrame 루프를 useEffect에서 시작하고 정리.
         const animationId = requestAnimationFrame(updateCarouselDisplay);
         return () => cancelAnimationFrame(animationId);
     }, [updateCarouselDisplay]);
 
 
     useEffect(() => {
+        // startAutoRotation은 animateRotation에 의존
+        // animateRotation은 useCallback으로 감싸져 있으므로 의존성에 포함.
+        // startAutoRotation 함수 자체가 이펙트 외부에서 선언된 useCallback이므로 여기에 의존성 추가
         startAutoRotation();
     }, [startAutoRotation]);
+
 
     useEffect(() => {
         document.body.addEventListener('mouseup', handleMouseUp);
@@ -331,34 +360,12 @@ function Carousel({ onEmojiSelect, onTransitionEnd }) {
         };
     }, [handleMouseUp, handleMouseMove]);
 
+
     useEffect(() => {
-        const mouseMoveHandler = (e) => {
-            const mouseX = e.clientX;
-            const mouseY = e.clientY;
-            let showArrows = false;
-            const prevBtnElement = prevBtnRef.current;
-            const nextBtnElement = nextBtnRef.current;
-            if (prevBtnElement) {
-                const btnCenter = getElementCenter(prevBtnElement);
-                if (Math.sqrt(Math.pow(mouseX - btnCenter.x, 2) + Math.pow(mouseY - btnCenter.y, 2)) < ARROW_PROXIMITY_RADIUS) {
-                    showArrows = true;
-                }
-            }
-            if (nextBtnElement) {
-                const btnCenter = getElementCenter(nextBtnElement);
-                if (Math.sqrt(Math.pow(mouseX - btnCenter.x, 2) + Math.pow(mouseY - btnCenter.y, 2)) < ARROW_PROXIMITY_RADIUS) {
-                    showArrows = true;
-                }
-            }
-            if (isHoveringAnyEmojiOrWrapper) {
-                showArrows = true;
-            }
-            if (prevBtnElement) prevBtnElement.classList.toggle('visible', showArrows);
-            if (nextBtnElement) nextBtnElement.classList.toggle('visible', showArrows);
-        };
         document.body.addEventListener('mousemove', mouseMoveHandler);
         return () => document.body.removeEventListener('mousemove', mouseMoveHandler);
-    }, [getElementCenter, isHoveringAnyEmojiOrWrapper, ARROW_PROXIMITY_RADIUS]);
+    }, [mouseMoveHandler]);
+
 
     return (
     <>
