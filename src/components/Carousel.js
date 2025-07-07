@@ -12,12 +12,12 @@ const emojiPaintingMap = {
     '🥳': { keywordGroups: [['celebration', 'party', 'triumph', 'wedding', 'festival']], title: '라스 메니나스 - 디에고 벨라스케스' },
     '😴': { keywordGroups: [['night', 'landscapes', 'moon', 'dream', 'stillness']], title: '별이 빛나는 밤 - 빈센트 반 고흐' },
     '🤯': { keywordGroups: [['abstract art', 'surrealism', 'cubism', 'geometry']], title: '절규 - 에드바르 뭉크' },
-    '😡': { keywordGroups: [['serene landscapes', 'still life with flowers', 'madonna and child', 'peace']], title: '1808년 5월 3일 - 프란시스코 고야' },
-    '🥶': { keywordGroups: [['fire', 'sun', 'summer', 'flowers', 'warmth']], title: '안개 바다 위의 방랑자 - 카스파르 다비트 프리드리히' },
-    '🥺': { keywordGroups: [['hope', 'light', 'angels', 'saints', 'charity'], ['sunrise', 'dawn', 'children'], ['gentle', 'soft', 'solace']], title: '비너스의 탄생 - 산드로 보티첼리' },
-    '🤔': { keywordGroups: [['sculpture', 'philosophy', 'manuscripts', 'maps', 'self-portraits'], ['studio', 'artist', 'contemplation'], ['stillness', 'shadow', 'light']], title: '생각하는 사람 - 오귀스트 로댕' },
-    '🤫': { keywordGroups: [['interiors', 'letters', 'window', 'symbols', 'allegory'], ['secret', 'glance', 'hidden'], ['quiet', 'intimate']], title: '아메리칸 고딕 - 그랜트 우드' },
-    '😭': { keywordGroups: [['hope', 'light', 'landscapes', 'sunrise', 'solace'], ['prayer', 'faith', 'resilience'], ['healing', 'renewal', 'peace']], title: '최후의 만찬 - 레오나르도 다빈치' }
+    '😡': { keywordGroups: ['serene landscapes', 'still life with flowers', 'madonna and child', 'peace'], title: '1808년 5월 3일 - 프란시스코 고야' },
+    '🥶': { keywordGroups: ['warmth', 'comfort', 'light', 'fire', 'sun', 'summer'], title: '안개 바다 위의 방랑자 - 카스파르 다비트 프리드리히' },
+    '🥺': { keywordGroups: ['hope', 'light', 'angels', 'saints', 'charity', 'sunrise'], title: '비너스의 탄생 - 산드로 보티첼리' },
+    '🤔': { keywordGroups: ['sculpture', 'philosophy', 'manuscripts', 'maps', 'self-portraits'], title: '생각하는 사람 - 오귀스트 로댕' },
+    '🤫': { keywordGroups: ['interiors', 'letters', 'window', 'symbols', 'allegory', 'secret'], title: '아메리칸 고딕 - 그랜트 우드' },
+    '😭': { keywordGroups: ['hope', 'light', 'landscapes', 'sunrise', 'solace', 'healing'], title: '최후의 만찬 - 레오나르도 다빈치' }
 };
 
 // test.html 시절의 원래 애니메이션 상수들을 모두 복원합니다.
@@ -59,14 +59,20 @@ function Carousel({ onEmojiSelect, onTransitionEnd }) {
     const animationStartTimeRef = useRef(null);
     const initialRotationForClickRef = useRef(0);
     const targetRotationForClickRef = useRef(0);
-    const numItems = currentEmojis.length; // numItems는 currentEmojis에 의존
-    const anglePerItem = numItems === 0 ? 0 : 360 / numItems; // anglePerItem은 numItems에 의존
-    const radius = numItems === 0 ? 0 : Math.round((EFFECTIVE_ITEM_SIZE / 2) / Math.tan(Math.PI / numItems)) + 70; // radius는 numItems에 의존
+    
+    // numItems, anglePerItem, radius는 currentEmojis 상태에 의존하므로
+    // useCallback 훅 내부에서 필요한 경우 클로저로 캡처되도록 두거나,
+    // 해당 훅의 의존성에 currentEmojis를 추가하여 업데이트되도록 합니다.
+    // 여기서는 최상위 컴포넌트 렌더링 시점에 계산되는 값으로 둡니다.
+    const numItems = currentEmojis.length;
+    const anglePerItem = numItems === 0 ? 0 : 360 / numItems;
+    const radius = numItems === 0 ? 0 : Math.round((EFFECTIVE_ITEM_SIZE / 2) / Math.tan(Math.PI / numItems)) + 70;
 
-    // handleInteractionEnd를 먼저 정의하여 다른 훅에서 참조할 수 있도록 합니다.
+    // ----- 모든 useCallback 함수를 이 위치에 모아서 정의 시작 -----
+
     const handleInteractionEnd = useCallback(() => {
         setIsInteractingWithCarousel(false);
-    }, []); // 이 함수는 외부 상태에 의존하지 않으므로 빈 배열
+    }, []);
 
     const handleInteractionStart = useCallback(() => {
         setIsInteractingWithCarousel(true);
@@ -82,55 +88,20 @@ function Carousel({ onEmojiSelect, onTransitionEnd }) {
             cancelAnimationFrame(momentumAnimationFrameIdRef.current);
             momentumAnimationFrameIdRef.current = null;
         }
-    }, []); // 이 함수는 외부 상태에 의존하지 않으므로 빈 배열
+    }, []);
 
-    const easeOutQuad = useCallback((t) => t * (2 - t), []); // 외부 상태에 의존하지 않음
+    const easeOutQuad = useCallback((t) => t * (2 - t), []);
 
-    const startMomentumAnimation = useCallback((initialVelocity) => {
-        if (momentumAnimationFrameIdRef.current) cancelAnimationFrame(momentumAnimationFrameIdRef.current);
-        let momentumVelocity = initialVelocity;
-        const momentumDeceleration = 0.92; // 상수
-        const minFlickVelocity = 0.05;     // 상수
-
-        function animateMomentum() {
-            setCurrentRotation(prev => prev + momentumVelocity);
-            momentumVelocity *= momentumDeceleration;
-            if (Math.abs(momentumVelocity) > minFlickVelocity) {
-                momentumAnimationFrameIdRef.current = requestAnimationFrame(animateMomentum);
-            } else {
-                momentumAnimationFrameIdRef.current = null;
-                handleInteractionEnd(); // 의존성 추가
-            }
+    // animateRotation은 isInteractingWithCarousel 상태에 의존하며, 자기 자신을 재귀적으로 호출
+    const animateRotation = useCallback(() => {
+        if (!isInteractingWithCarousel) {
+            setCurrentRotation(prev => prev - ROTATION_SPEED_DEGREES_PER_FRAME);
+            animationFrameIdRef.current = requestAnimationFrame(animateRotation); // 자기 자신 참조
+        } else {
+            animationFrameIdRef.current = null;
         }
-        momentumAnimationFrameIdRef.current = requestAnimationFrame(animateMomentum);
-    }, [handleInteractionEnd]); // handleInteractionEnd 추가
+    }, [isInteractingWithCarousel]); // isInteractingWithCarousel 추가
 
-    const animateToTargetRotation = useCallback((targetRot) => {
-        if (clickAnimationFrameIdRef.current) cancelAnimationFrame(clickAnimationFrameIdRef.current);
-        initialRotationForClickRef.current = currentRotation; // currentRotation은 상태
-        targetRotationForClickRef.current = targetRot;
-        animationStartTimeRef.current = null;
-
-        function step(timestamp) {
-            if (!animationStartTimeRef.current) animationStartTimeRef.current = timestamp;
-            const elapsed = timestamp - animationStartTimeRef.current;
-            let progress = elapsed / CLICK_ANIMATION_DURATION; // CLICK_ANIMATION_DURATION은 상수
-            if (progress > 1) progress = 1;
-            const easedProgress = easeOutQuad(progress); // easeOutQuad는 함수
-            const rotationDifference = targetRotationForClickRef.current - initialRotationForClickRef.current;
-            setCurrentRotation(initialRotationForClickRef.current + rotationDifference * easedProgress);
-            if (progress < 1) {
-                clickAnimationFrameIdRef.current = requestAnimationFrame(step);
-            } else {
-                setCurrentRotation(targetRotationForClickRef.current);
-                clickAnimationFrameIdRef.current = null;
-                handleInteractionEnd(); // 의존성 추가
-            }
-        }
-        clickAnimationFrameIdRef.current = requestAnimationFrame(step);
-    }, [currentRotation, easeOutQuad, handleInteractionEnd]); // currentRotation, easeOutQuad, handleInteractionEnd 추가
-
-    // updateCarouselDisplay는 여러 상태에 의존하므로 의존성 배열에 모두 포함
     const updateCarouselDisplay = useCallback(() => {
         if (!carouselContainerRef.current) return;
         carouselContainerRef.current.style.transform = `rotateY(${currentRotation}deg)`;
@@ -144,7 +115,7 @@ function Carousel({ onEmojiSelect, onTransitionEnd }) {
             let itemAbsoluteAngle = numItems > 0 ? (index * anglePerItem + currentRotation) % 360 : 0;
             if (itemAbsoluteAngle > 180) itemAbsoluteAngle -= 360;
             else if (itemAbsoluteAngle < -180) itemAbsoluteAngle += 360;
-
+            
             const distanceAngle = Math.abs(itemAbsoluteAngle);
             let blurAmount = 0, opacityAmount = 1, currentScale = 1;
 
@@ -161,41 +132,109 @@ function Carousel({ onEmojiSelect, onTransitionEnd }) {
                     else blurAmount = distanceAngle / 90 * 5;
                 }
             }
-            // 가라앉는 중이 아니면 transform을 업데이트
             if (emojiElement.dataset.isSinking !== 'true') {
                 emojiElement.style.opacity = opacityAmount;
                 emojiElement.style.filter = `blur(${blurAmount}px)`;
                 emojiElement.style.transform = `translate(-50%, -50%) rotateY(${index * anglePerItem}deg) translateZ(${radius}px) scale(${currentScale})`;
             }
         });
-    }, [currentRotation, anglePerItem, numItems, hoveredItemIndex, isCenterHoveredOrClicked, currentEmojis, radius]); // 모든 의존성 포함
+    }, [currentRotation, anglePerItem, numItems, hoveredItemIndex, isCenterHoveredOrClicked, currentEmojis, radius]);
 
-    // animateRotation은 isInteractingWithCarousel에 의존
-    const animateRotation = useCallback(() => {
-        if (!isInteractingWithCarousel) {
-            setCurrentRotation(prev => prev - ROTATION_SPEED_DEGREES_PER_FRAME);
-            animationFrameIdRef.current = requestAnimationFrame(animateRotation);
-        } else {
-            animationFrameIdRef.current = null;
+
+    const startMomentumAnimation = useCallback((initialVelocity) => {
+        if (momentumAnimationFrameIdRef.current) cancelAnimationFrame(momentumAnimationFrameIdRef.current);
+        let momentumVelocity = initialVelocity;
+        const momentumDeceleration = 0.92;
+        const minFlickVelocity = 0.05;
+
+        function animateMomentum() {
+            setCurrentRotation(prev => prev + momentumVelocity);
+            momentumVelocity *= momentumDeceleration;
+            if (Math.abs(momentumVelocity) > minFlickVelocity) {
+                momentumAnimationFrameIdRef.current = requestAnimationFrame(animateMomentum);
+            } else {
+                momentumAnimationFrameIdRef.current = null;
+                handleInteractionEnd();
+            }
         }
-    }, [isInteractingWithCarousel]); // isInteractingWithCarousel 추가
+        momentumAnimationFrameIdRef.current = requestAnimationFrame(animateMomentum);
+    }, [handleInteractionEnd]);
 
-    const startAutoRotation = useCallback(() => {
-        if (!animationFrameIdRef.current && !isInteractingWithCarousel && !isHoveringAnyEmojiOrWrapper && numItems > 0) {
-            animationFrameIdRef.current = requestAnimationFrame(animateRotation);
+
+    const animateToTargetRotation = useCallback((targetRot) => {
+        if (clickAnimationFrameIdRef.current) cancelAnimationFrame(clickAnimationFrameIdRef.current);
+        initialRotationForClickRef.current = currentRotation;
+        targetRotationForClickRef.current = targetRot;
+        animationStartTimeRef.current = null;
+
+        function step(timestamp) {
+            if (!animationStartTimeRef.current) animationStartTimeRef.current = timestamp;
+            const elapsed = timestamp - animationStartTimeRef.current;
+            let progress = elapsed / CLICK_ANIMATION_DURATION;
+            if (progress > 1) progress = 1;
+            const easedProgress = easeOutQuad(progress);
+            const rotationDifference = targetRotationForClickRef.current - initialRotationForClickRef.current;
+            setCurrentRotation(initialRotationForClickRef.current + rotationDifference * easedProgress);
+            if (progress < 1) {
+                clickAnimationFrameIdRef.current = requestAnimationFrame(step);
+            } else {
+                setCurrentRotation(targetRotationForClickRef.current);
+                clickAnimationFrameIdRef.current = null;
+                handleInteractionEnd();
+            }
         }
-    }, [animateRotation, isInteractingWithCarousel, isHoveringAnyEmojiOrWrapper, numItems]); // 모든 의존성 포함
+        clickAnimationFrameIdRef.current = requestAnimationFrame(step);
+    }, [currentRotation, easeOutQuad, handleInteractionEnd]);
 
-    useEffect(() => {
-        startAutoRotation();
-    }, [startAutoRotation]); // startAutoRotation 추가
+
+    const handleEmojiClick = useCallback((emojiText) => {
+        if (hasDraggedRef.current) {
+            hasDraggedRef.current = false;
+            return;
+        }
+        handleInteractionStart();
+        const paintingData = emojiPaintingMap[emojiText];
+        if (!paintingData) {
+            handleInteractionEnd();
+            return;
+        }
+        onEmojiSelect({ emoji: emojiText, ...paintingData });
+
+        const mainContainer = mainContainerRef.current;
+        currentEmojis.forEach((item, index) => {
+            const emojiElement = carouselContainerRef.current.children[index];
+            if (emojiElement) {
+                emojiElement.dataset.isSinking = 'true';
+                const randomRotation = Math.random() * 90 - 45;
+                const randomScale = 0.1;
+                emojiElement.style.transition = `transform ${SINK_DURATION_TRANSFORM}ms cubic-bezier(0.75, 0.0, 0.25, 1.0), opacity ${SINK_DURATION_OPACITY}ms linear, filter ${SINK_DURATION_TRANSFORM}ms cubic-bezier(0.75, 0.0, 0.25, 1.0)`;
+                emojiElement.style.transform = `translate(-50%, -50%) translateY(${SINK_DISTANCE}px) rotate(${randomRotation}deg) scale(${randomScale})`;
+                emojiElement.style.opacity = 0;
+                emojiElement.style.filter = `blur(${MAX_BLUR}px)`;
+                emojiElement.style.pointerEvents = 'none';
+            }
+        });
+
+        setTimeout(() => {
+            if (mainContainer) {
+                mainContainer.style.transition = `transform 10300ms cubic-bezier(0.75, 0.0, 0.25, 1.0), opacity ${SCREEN_SINK_DURATION_OPACITY}ms linear`;
+                mainContainer.style.transform = `translateY(${window.innerHeight * 1.5}px)`;
+                mainContainer.style.opacity = 0;
+            }
+        }, SCREEN_SINK_START_DELAY);
+        
+        setTimeout(() => {
+            onTransitionEnd();
+        }, Math.max(SINK_DURATION_OPACITY, SCREEN_SINK_START_DELAY + SCREEN_SINK_DURATION_OPACITY));
+
+    }, [currentEmojis, handleInteractionStart, onEmojiSelect, onTransitionEnd, handleInteractionEnd]); // 의존성 추가 완료
 
     const handleMouseDown = useCallback((e) => {
         if (e.button === 0) {
             isDraggingRef.current = true;
             startXRef.current = e.clientX;
-            startRotationAtDragRef.current = currentRotation; // currentRotation은 상태
-            handleInteractionStart(); // 의존성 추가
+            startRotationAtDragRef.current = currentRotation;
+            handleInteractionStart();
             if (carouselWrapperRef.current) carouselWrapperRef.current.style.cursor = 'grabbing';
             hasDraggedRef.current = false;
             lastMouseXRef.current = e.clientX;
@@ -203,69 +242,86 @@ function Carousel({ onEmojiSelect, onTransitionEnd }) {
             currentDragVelocityRef.current = 0;
             e.preventDefault();
         }
-    }, [currentRotation, handleInteractionStart]); // currentRotation, handleInteractionStart 추가
+    }, [currentRotation, handleInteractionStart]);
 
     const handleMouseMove = useCallback((e) => {
         if (isDraggingRef.current) {
             const deltaX = e.clientX - startXRef.current;
-            if (Math.abs(deltaX) > DRAG_THRESHOLD_PX) { hasDraggedRef.current = true; } // DRAG_THRESHOLD_PX는 상수
-            const rotationChange = deltaX * DRAG_SENSITIVITY; // DRAG_SENSITIVITY는 상수
-            setCurrentRotation(startRotationAtDragRef.current + rotationChange); // startRotationAtDragRef는 ref
+            if (Math.abs(deltaX) > DRAG_THRESHOLD_PX) { hasDraggedRef.current = true; }
+            const rotationChange = deltaX * DRAG_SENSITIVITY;
+            setCurrentRotation(startRotationAtDragRef.current + rotationChange);
             const now = performance.now();
-            const deltaXForVelocity = e.clientX - lastMouseXRef.current; // lastMouseXRef는 ref
-            const deltaTimeForVelocity = now - lastMoveTimestampRef.current; // lastMoveTimestampRef는 ref
-            if (deltaTimeForVelocity > 0) { currentDragVelocityRef.current = deltaXForVelocity / deltaTimeForVelocity; } // currentDragVelocityRef는 ref
+            const deltaXForVelocity = e.clientX - lastMouseXRef.current;
+            const deltaTimeForVelocity = now - lastMoveTimestampRef.current;
+            if (deltaTimeForVelocity > 0) { currentDragVelocityRef.current = deltaXForVelocity / deltaTimeForVelocity; }
             lastMouseXRef.current = e.clientX;
             lastMoveTimestampRef.current = now;
             e.preventDefault();
         }
-    }, []); // ref.current 값은 의존성 배열에 넣지 않아도 됨 (클로저 문제 없음). 상수도 불변이라 괜찮음.
+    }, [DRAG_THRESHOLD_PX, DRAG_SENSITIVITY]);
 
     const handleMouseUp = useCallback(() => {
         if (isDraggingRef.current) {
             isDraggingRef.current = false;
             if (carouselWrapperRef.current) { carouselWrapperRef.current.style.cursor = 'grab'; }
             if (hasDraggedRef.current) {
-                startMomentumAnimation(currentDragVelocityRef.current * DRAG_SENSITIVITY * 150); // DRAG_SENSITIVITY는 상수
+                startMomentumAnimation(currentDragVelocityRef.current * DRAG_SENSITIVITY * 150);
             } else {
-                handleInteractionEnd(); // 의존성 추가
+                handleInteractionEnd();
             }
         }
-    }, [startMomentumAnimation, handleInteractionEnd]); // startMomentumAnimation, handleInteractionEnd 추가
-
+    }, [startMomentumAnimation, handleInteractionEnd, DRAG_SENSITIVITY]);
+    
     const handleControlClick = useCallback((direction) => {
-        handleInteractionStart(); // 의존성 추가
-        const targetRot = currentRotation + (direction === 'prev' ? -anglePerItem : anglePerItem); // currentRotation, anglePerItem은 상태/파생 상태
-        animateToTargetRotation(targetRot); // 의존성 추가
-    }, [currentRotation, anglePerItem, handleInteractionStart, animateToTargetRotation]); // 모든 의존성 포함
+        handleInteractionStart();
+        const targetRot = currentRotation + (direction === 'prev' ? -anglePerItem : anglePerItem);
+        animateToTargetRotation(targetRot);
+    }, [currentRotation, anglePerItem, handleInteractionStart, animateToTargetRotation]);
 
-    const handleWrapperHover = useCallback(() => {
-        handleInteractionStart(); // 의존성 추가
-        setIsHoveringAnyEmojiOrWrapper(true);
-    }, [handleInteractionStart]); // handleInteractionStart 추가
+    const handleWrapperHover = useCallback(() => { handleInteractionStart(); setIsHoveringAnyEmojiOrWrapper(true); }, [handleInteractionStart]);
 
-    const handleWrapperMouseLeave = useCallback(() => {
-        handleInteractionEnd(); // 의존성 추가
-        setHoveredItemIndex(-1);
-        setIsHoveringAnyEmojiOrWrapper(false);
-    }, [handleInteractionEnd]); // handleInteractionEnd 추가
+    const handleWrapperMouseLeave = useCallback(() => { handleInteractionEnd(); setHoveredItemIndex(-1); setIsHoveringAnyEmojiOrWrapper(false); }, [handleInteractionEnd]);
 
     const handleEmojiMouseOver = useCallback((index) => {
-        handleInteractionStart(); // 의존성 추가
+        handleInteractionStart();
         const emojiElement = carouselContainerRef.current.children[index];
         if (emojiElement && emojiElement.classList.contains('selected')) { setIsCenterHoveredOrClicked(true); }
         setHoveredItemIndex(index);
         setIsHoveringAnyEmojiOrWrapper(true);
-    }, [handleInteractionStart, isCenterHoveredOrClicked]); // handleInteractionStart, isCenterHoveredOrClicked 추가 (selectedIndex가 아닌 isCenterHoveredOrClicked가 정확한 의존성)
+    }, [handleInteractionStart, isCenterHoveredOrClicked]);
 
     const handleEmojiMouseOut = useCallback(() => {
-        handleInteractionEnd(); // 의존성 추가
+        handleInteractionEnd();
         setIsCenterHoveredOrClicked(false);
         setHoveredItemIndex(-1);
         setIsHoveringAnyEmojiOrWrapper(false);
-    }, [handleInteractionEnd]); // handleInteractionEnd 추가
+    }, [handleInteractionEnd]);
 
-    // 마우스 이벤트 리스너를 한 곳에서 관리
+    const getElementCenter = useCallback((element) => {
+        if (!element) return { x: 0, y: 0 };
+        const rect = element.getBoundingClientRect();
+        return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
+    }, []);
+
+    // ----- 모든 useCallback 함수를 이 위치에 모아서 정의 끝 -----
+
+
+    useEffect(() => {
+        const emojis = Object.keys(emojiPaintingMap).map(emoji => ({ emoji, data: emojiPaintingMap[emoji] }));
+        setCurrentEmojis(emojis);
+    }, []);
+
+    useEffect(() => {
+        // updateCarouselDisplay를 useEffect에서 호출하여 렌더링에 반영
+        const animationId = requestAnimationFrame(updateCarouselDisplay);
+        return () => cancelAnimationFrame(animationId);
+    }, [updateCarouselDisplay]);
+
+
+    useEffect(() => {
+        startAutoRotation();
+    }, [startAutoRotation]);
+
     useEffect(() => {
         document.body.addEventListener('mouseup', handleMouseUp);
         document.body.addEventListener('mousemove', handleMouseMove);
@@ -273,13 +329,7 @@ function Carousel({ onEmojiSelect, onTransitionEnd }) {
             document.body.removeEventListener('mouseup', handleMouseUp);
             document.body.removeEventListener('mousemove', handleMouseMove);
         };
-    }, [handleMouseUp, handleMouseMove]); // handleMouseUp, handleMouseMove 추가
-
-    const getElementCenter = useCallback((element) => {
-        if (!element) return { x: 0, y: 0 };
-        const rect = element.getBoundingClientRect();
-        return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
-    }, []); // 의존성 없음
+    }, [handleMouseUp, handleMouseMove]);
 
     useEffect(() => {
         const mouseMoveHandler = (e) => {
@@ -290,7 +340,7 @@ function Carousel({ onEmojiSelect, onTransitionEnd }) {
             const nextBtnElement = nextBtnRef.current;
             if (prevBtnElement) {
                 const btnCenter = getElementCenter(prevBtnElement);
-                if (Math.sqrt(Math.pow(mouseX - btnCenter.x, 2) + Math.pow(mouseY - btnCenter.y, 2)) < ARROW_PROXIMITY_RADIUS) { // ARROW_PROXIMITY_RADIUS는 상수
+                if (Math.sqrt(Math.pow(mouseX - btnCenter.x, 2) + Math.pow(mouseY - btnCenter.y, 2)) < ARROW_PROXIMITY_RADIUS) {
                     showArrows = true;
                 }
             }
@@ -300,21 +350,15 @@ function Carousel({ onEmojiSelect, onTransitionEnd }) {
                     showArrows = true;
                 }
             }
-            if (isHoveringAnyEmojiOrWrapper) { // isHoveringAnyEmojiOrWrapper는 상태
+            if (isHoveringAnyEmojiOrWrapper) {
                 showArrows = true;
             }
             if (prevBtnElement) prevBtnElement.classList.toggle('visible', showArrows);
-            if (nextBtnElement) nextBtnRef.current.classList.toggle('visible', showArrows); // nextBtnElement로 변경
+            if (nextBtnElement) nextBtnElement.classList.toggle('visible', showArrows);
         };
         document.body.addEventListener('mousemove', mouseMoveHandler);
         return () => document.body.removeEventListener('mousemove', mouseMoveHandler);
-    }, [getElementCenter, isHoveringAnyEmojiOrWrapper]); // getElementCenter, isHoveringAnyEmojiOrWrapper 추가
-
-    // currentRotation 또는 관련 상태가 변경될 때마다 updateCarouselDisplay 호출
-    useEffect(() => {
-        const animationId = requestAnimationFrame(updateCarouselDisplay);
-        return () => cancelAnimationFrame(animationId);
-    }, [currentRotation, hoveredItemIndex, isCenterHoveredOrClicked, updateCarouselDisplay]); // updateCarouselDisplay는 useCallback으로 감싸져 있으므로 안전
+    }, [getElementCenter, isHoveringAnyEmojiOrWrapper, ARROW_PROXIMITY_RADIUS]);
 
     return (
     <>
