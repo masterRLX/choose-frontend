@@ -60,8 +60,6 @@ function Carousel({ onEmojiSelect, onTransitionEnd }) {
     const initialRotationForClickRef = useRef(0);
     const targetRotationForClickRef = useRef(0);
     
-    // numItems, anglePerItem, radius는 currentEmojis 상태에 의존하며,
-    // 컴포넌트 렌더링 시점에 계산되므로 useCallback 훅 외부에 두어 매 렌더링마다 최신 값 참조
     const numItems = currentEmojis.length;
     const anglePerItem = numItems === 0 ? 0 : 360 / numItems;
     const radius = numItems === 0 ? 0 : Math.round((EFFECTIVE_ITEM_SIZE / 2) / Math.tan(Math.PI / numItems)) + 70;
@@ -90,16 +88,24 @@ function Carousel({ onEmojiSelect, onTransitionEnd }) {
 
     const easeOutQuad = useCallback((t) => t * (2 - t), []);
 
-    // animateRotation은 isInteractingWithCarousel 상태에 의존하며, 자기 자신을 재귀적으로 호출
-    const animateRotation = useCallback(() => {
-        if (!isInteractingWithCarousel) {
-            setCurrentRotation(prev => prev - ROTATION_SPEED_DEGREES_PER_FRAME);
-            animationFrameIdRef.current = requestAnimationFrame(animateRotation); // 자기 자신을 참조
-        } else {
-            animationFrameIdRef.current = null;
-        }
-    }, [isInteractingWithCarousel]); // isInteractingWithCarousel 의존
+    // animateRotation을 startAutoRotation 내부 함수로 정의하여 클로저 문제 해결
+    const startAutoRotation = useCallback(() => {
+        let currentAnimationId;
+        const animateRotation = () => { // 이 함수는 startAutoRotation 클로저 안에 있음
+            if (!isInteractingWithCarousel) {
+                setCurrentRotation(prev => prev - ROTATION_SPEED_DEGREES_PER_FRAME);
+                currentAnimationId = requestAnimationFrame(animateRotation); // 자신을 참조
+            } else {
+                currentAnimationId = null;
+            }
+            animationFrameIdRef.current = currentAnimationId; // 외부 ref 업데이트
+        };
 
+        if (!animationFrameIdRef.current && !isInteractingWithCarousel && !isHoveringAnyEmojiOrWrapper && numItems > 0) {
+            currentAnimationId = requestAnimationFrame(animateRotation);
+            animationFrameIdRef.current = currentAnimationId;
+        }
+    }, [isInteractingWithCarousel, isHoveringAnyEmojiOrWrapper, numItems]); // animateRotation 내부 함수가 isInteractingWithCarousel, numItems에 의존
 
     const updateCarouselDisplay = useCallback(() => {
         if (!carouselContainerRef.current) return;
@@ -228,6 +234,7 @@ function Carousel({ onEmojiSelect, onTransitionEnd }) {
 
     }, [currentEmojis, handleInteractionStart, onEmojiSelect, onTransitionEnd, handleInteractionEnd]);
 
+
     const handleMouseDown = useCallback((e) => {
         if (e.button === 0) {
             isDraggingRef.current = true;
@@ -324,7 +331,7 @@ function Carousel({ onEmojiSelect, onTransitionEnd }) {
             showArrows = true;
         }
         if (prevBtnElement) prevBtnElement.classList.toggle('visible', showArrows);
-        if (nextBtnElement) nextBtnElement.classList.toggle('visible', showArrows); // 오타 수정 (이미 수정되어 있었을 것)
+        if (nextBtnElement) nextBtnElement.classList.toggle('visible', showArrows);
     }, [getElementCenter, isHoveringAnyEmojiOrWrapper, ARROW_PROXIMITY_RADIUS]);
 
     // ----- 모든 useCallback 함수들을 상단에 모아서 정의 끝 -----
